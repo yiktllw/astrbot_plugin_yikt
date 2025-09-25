@@ -129,7 +129,7 @@ class YiktPlugin(Star):
         return group_id
 
     @filter.command("pet")
-    async def pet_command(self, event: AstrMessageEvent, *args, **kwargs):
+    async def pet_command(self, event: AstrMessageEvent, template: str = None, target: str = None):
         """
         /pet 模板名 [@用户|用户ID] - 生成 petpet 图片
         支持的模板：挠头、拍、摸、摸摸
@@ -139,24 +139,27 @@ class YiktPlugin(Star):
         message_text = event.message_str
         sender_id = event.get_sender_id()
         
-        self._debug_log(f"收到pet命令: {message_text}")
+        self._debug_log(f"收到pet命令: {message_text}, template={template}, target={target}")
         
-        # 解析命令参数
-        parts = message_text.split()
-        if len(parts) < 2:
+        # 检查模板参数
+        if not template:
             yield event.plain_result("请指定模板类型！\n用法: /pet <模板> [@用户|用户ID]\n支持的模板: 挠头、拍、摸、摸摸")
             return
         
-        template_name = parts[1]
-        if template_name not in self.template_mapping:
-            yield event.plain_result(f"不支持的模板: {template_name}\n支持的模板: {', '.join(self.template_mapping.keys())}")
+        if template not in self.template_mapping:
+            yield event.plain_result(f"不支持的模板: {template}\n支持的模板: {', '.join(self.template_mapping.keys())}")
             return
         
-        template_id = self.template_mapping[template_name]
-        self._debug_log(f"使用模板: {template_name} -> {template_id}")
+        template_id = self.template_mapping[template]
+        self._debug_log(f"使用模板: {template} -> {template_id}")
         
-        # 提取目标用户信息
+        # 处理目标用户信息
         at_users, user_names = self._extract_user_info(message_chain, message_text)
+        
+        # 如果命令行提供了target参数，优先使用
+        if target and not at_users and not user_names:
+            user_names = [target]
+            self._debug_log(f"使用命令行参数作为目标: {target}")
         
         if not at_users and not user_names:
             # 如果没有指定用户，使用发送者自己
@@ -228,7 +231,7 @@ class YiktPlugin(Star):
             yield event.plain_result(f"生成petpet失败: {e}")
 
     @filter.command("pet帮助")
-    async def pet_help(self, event: AstrMessageEvent, *args, **kwargs):
+    async def pet_help(self, event: AstrMessageEvent):
         """显示petpet帮助信息"""
         help_text = (
             "=== yikt petpet 帮助 ===\n\n"

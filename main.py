@@ -138,7 +138,7 @@ class YiktPlugin(Star):
         return group_id
 
     @filter.command("pet")
-    async def pet_command(self, event: AstrMessageEvent, *args):
+    async def pet_command(self, event: AstrMessageEvent, template: str = None, target: str = None):
         """
         /pet <模板> [目标] - 生成 petpet 图片
         
@@ -150,13 +150,7 @@ class YiktPlugin(Star):
         message_text = event.message_str
         sender_id = event.get_sender_id()
         
-        self._debug_log(f"收到pet命令: {message_text}, args={args}")
-        
-        # 解析参数
-        template = args[0] if len(args) > 0 else None
-        target = args[1] if len(args) > 1 else None
-        
-        self._debug_log(f"解析参数: template='{template}', target='{target}'")
+        self._debug_log(f"收到pet命令: {message_text}, template='{template}', target='{target}'")
         
         # 检查模板参数
         if not template:
@@ -170,7 +164,7 @@ class YiktPlugin(Star):
         template_id = self.template_mapping[template]
         self._debug_log(f"使用模板: {template} -> {template_id}")
         
-        # 首先检查是否有@用户
+        # 首先检查是否有@用户（从消息链中提取）
         at_users = []
         for segment in message_chain:
             if hasattr(segment, 'type') and segment.type == 'at':
@@ -183,18 +177,18 @@ class YiktPlugin(Star):
         target_user_id = None
         
         if at_users:
-            # 优先使用@用户
+            # 优先使用@用户（这是最常见的情况）
             target_user_id = at_users[0]
             self._debug_log(f"使用@用户: {target_user_id}")
         elif target:
-            # 使用命令行参数
+            # 使用命令行第二个参数
             import re
             if re.match(r'^\d+$', target):
                 target_user_id = target
                 self._debug_log(f"使用命令行数字参数: {target}")
             else:
-                # 如果不是数字，可能是用户名，但我们暂时不支持
-                yield event.plain_result(f"不支持用户名查找，请使用@用户或纯数字用户ID")
+                # 如果不是数字，提示错误
+                yield event.plain_result(f"用户ID必须是纯数字，请使用@用户或正确的数字用户ID")
                 return
         else:
             # 没有指定用户，使用发送者自己

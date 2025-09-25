@@ -11,7 +11,7 @@ from astrbot.api import logger
 from astrbot.core.star import StarTools
 from astrbot.core.config import AstrBotConfig
 import astrbot.api.message_components as seg
-from PIL import Image
+from PIL import Image, ImageDraw
 
 # 导入 petpet 生成器
 try:
@@ -76,6 +76,39 @@ class YiktPlugin(Star):
             logger.error(f"下载头像失败: {e}")
             return None
 
+    def make_avatar_circular(self, avatar_bytes: bytes, size: int = 640) -> bytes:
+        """将头像处理成圆形"""
+        try:
+            # 打开图片
+            with BytesIO(avatar_bytes) as input_buffer:
+                img = Image.open(input_buffer).convert("RGBA")
+            
+            # 调整图片大小
+            img = img.resize((size, size), Image.Resampling.LANCZOS)
+            
+            # 创建一个圆形遮罩
+            mask = Image.new("L", (size, size), 0)
+            draw = ImageDraw.Draw(mask)
+            draw.ellipse((0, 0, size, size), fill=255)
+            
+            # 创建透明背景的输出图片
+            output = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+            
+            # 应用圆形遮罩
+            output.paste(img, (0, 0))
+            output.putalpha(mask)
+            
+            # 转换为字节
+            with BytesIO() as output_buffer:
+                output.save(output_buffer, format="PNG")
+                return output_buffer.getvalue()
+                
+        except Exception as e:
+            self._debug_log(f"处理圆形头像失败: {e}")
+            logger.error(f"处理圆形头像失败: {e}")
+            # 如果处理失败，返回原始字节
+            return avatar_bytes
+
     def _extract_user_info(self, message_chain, message_text: str):
         """从消息中提取用户信息（支持@和用户名）"""
         at_users = []
@@ -110,14 +143,36 @@ class YiktPlugin(Star):
 
     def _parse_target_user(self, message_chain, message_text: str, sender_id: str) -> Optional[str]:
         """从消息中解析目标用户ID"""
+        # 调试：打印消息链结构
+        self._debug_log(f"消息链长度: {len(message_chain)}")
+        for i, segment in enumerate(message_chain):
+            self._debug_log(f"消息段 {i}: type={getattr(segment, 'type', 'Unknown')}, data={getattr(segment, 'data', {})}")
+        
         # 首先检查是否有@用户（从消息链中提取）
         at_users = []
         for segment in message_chain:
-            if hasattr(segment, 'type') and segment.type == 'at':
-                if hasattr(segment, 'data') and 'qq' in segment.data:
-                    at_users.append(segment.data['qq'])
+            # 尝试多种可能的属性名
+            segment_type = getattr(segment, 'type', None)
+            if segment_type == 'at':
+                # 尝试多种可能的数据格式
+                data = getattr(segment, 'data', {})
+                if isinstance(data, dict):
+                    qq_id = data.get('qq') or data.get('user_id') or data.get('target')
+                    if qq_id:
+                        at_users.append(str(qq_id))
+                        self._debug_log(f"从消息链找到@用户: {qq_id}")
         
-        self._debug_log(f"找到@用户: {at_users}")
+        # 如果从消息链解析失败，尝试从消息文本中提取
+        if not at_users:
+            import re
+            # 匹配 [At:数字] 格式
+            at_pattern = r'\[At:(\d+)\]'
+            at_matches = re.findall(at_pattern, message_text)
+            if at_matches:
+                at_users = at_matches
+                self._debug_log(f"从消息文本找到@用户: {at_users}")
+        
+        self._debug_log(f"最终找到@用户: {at_users}")
         
         if at_users:
             # 优先使用@用户（这是最常见的情况）
@@ -222,12 +277,17 @@ class YiktPlugin(Star):
             
             self._debug_log(f"头像获取完成，大小: {len(avatar_bytes)} bytes")
             
+            # 将头像处理成圆形
+            self._debug_log("开始处理圆形头像")
+            circular_avatar_bytes = self.make_avatar_circular(avatar_bytes)
+            self._debug_log(f"圆形头像处理完成，大小: {len(circular_avatar_bytes)} bytes")
+            
             # 生成 petpet 图片
             self._debug_log(f"开始生成petpet，模板: {template_id}")
             templates_dir = os.path.join(os.path.dirname(__file__), 'petpet', 'templates')
             result_bytes = await asyncio.to_thread(
                 generate_meme_from_bytes,
-                avatar_bytes,
+                circular_avatar_bytes,
                 template_id,
                 None,  # text_content
                 templates_dir

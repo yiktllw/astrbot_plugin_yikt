@@ -89,12 +89,21 @@ class YiktPlugin(Star):
         
         # 从文本中提取用户名（去除命令部分和@信息）
         import re
+        
+        # 调试信息
+        self._debug_log(f"原始消息文本: '{message_text}'")
+        
         # 去除命令部分和@信息，提取剩余的文本作为用户名
         text_without_command = re.sub(r'^/pet\s+\w+\s*', '', message_text).strip()
+        self._debug_log(f"去除命令后: '{text_without_command}'")
+        
         # 去除@信息
         text_without_at = re.sub(r'\[At:\d+\]', '', text_without_command).strip()
+        self._debug_log(f"去除@信息后: '{text_without_at}'")
+        
         if text_without_at and not at_users:
             user_names.append(text_without_at)
+            self._debug_log(f"添加用户名: '{text_without_at}'")
         
         self._debug_log(f"提取用户信息: @用户={at_users}, 用户名={user_names}")
         return at_users, user_names
@@ -141,7 +150,9 @@ class YiktPlugin(Star):
         message_text = event.message_str
         sender_id = event.get_sender_id()
         
-        self._debug_log(f"收到pet命令: {message_text}, template={template}, target={target}")
+        self._debug_log(f"收到pet命令: {message_text}")
+        self._debug_log(f"解析参数: template='{template}', target='{target}'")
+        self._debug_log(f"消息链: {[str(seg) for seg in message_chain]}")
         
         # 检查模板参数
         if not template:
@@ -155,45 +166,69 @@ class YiktPlugin(Star):
         template_id = self.template_mapping[template]
         self._debug_log(f"使用模板: {template} -> {template_id}")
         
-        # 处理目标用户信息
-        at_users, user_names = self._extract_user_info(message_chain, message_text)
+        # 首先检查是否有@用户
+        at_users = []
+        for segment in message_chain:
+            if hasattr(segment, 'type') and segment.type == 'at':
+                if hasattr(segment, 'data') and 'qq' in segment.data:
+                    at_users.append(segment.data['qq'])
         
-        # 如果命令行提供了target参数，优先使用
-        if target and not at_users and not user_names:
-            user_names = [target]
-            self._debug_log(f"使用命令行参数作为目标: {target}")
+        self._debug_log(f"找到@用户: {at_users}")
         
-        if not at_users and not user_names:
-            # 如果没有指定用户，使用发送者自己
-            target_user_id = sender_id
-            self._debug_log(f"未指定目标用户，使用发送者: {target_user_id}")
-        else:
-            # 优先使用@的用户
-            if at_users:
-                target_user_id = at_users[0]
-                self._debug_log(f"使用@用户: {target_user_id}")
+        # 确定目标用户ID
+        target_user_id = None
+        
+        if at_users:
+            # 优先使用@用户
+            target_user_id = at_users[0]
+            self._debug_log(f"使用@用户: {target_user_id}")
+        elif target:
+            # 使用命令行参数
+            import re
+            if re.match(r'^\d+$', target):
+                target_user_id = target
+                self._debug_log(f"使用命令行数字参数: {target}")
             else:
-                # 尝试通过用户名查找用户ID
-                user_name = user_names[0]
-                self._debug_log(f"尝试通过用户名查找用户: {user_name}")
-                
-                # 获取群组ID用于查找用户
-                session_id = event.get_session_id()
-                group_id = self.get_group_id_from_session(session_id)
-                
-                target_user_id = await self._get_user_id_by_name(user_name, group_id)
-                
-                if not target_user_id:
-                    # 如果无法找到用户ID，尝试直接使用用户名作为数字ID（如果是纯数字）
-                    import re
-                    if re.match(r'^\d+$', user_name):
-                        target_user_id = user_name
-                        self._debug_log(f"用户名是纯数字，直接使用作为用户ID: {target_user_id}")
-                    else:
-                        yield event.plain_result(f"无法找到用户 '{user_name}'，请使用@用户或提供正确的用户ID")
-                        return
+                # 如果不是数字，可能是用户名，但我们暂时不支持
+                yield event.plain_result(f"不支持用户名查找，请使用@用户或纯数字用户ID")
+                return
+        else:
+            # 没有指定用户，使用发送者自己
+            target_user_id = sender_id
+            self._debug_log(f"未指定目标，使用发送者: {target_user_id}")
+        
+        if not target_user_id:
+            if not at_users and not user_names:
+                # 如果没有指定用户，使用发送者自己
+                target_user_id = sender_id
+                self._debug_log(f"未指定目标用户，使用发送者: {target_user_id}")
+            else:
+                # 优先使用@的用户
+                if at_users:
+                    target_user_id = at_users[0]
+                    self._debug_log(f"使用@用户: {target_user_id}")
                 else:
-                    self._debug_log(f"通过用户名找到用户ID: {target_user_id}")
+                    # 尝试通过用户名查找用户ID
+                    user_name = user_names[0]
+                    self._debug_log(f"尝试通过用户名查找用户: {user_name}")
+                    
+                    # 获取群组ID用于查找用户
+                    session_id = event.get_session_id()
+                    group_id = self.get_group_id_from_session(session_id)
+                    
+                    target_user_id = await self._get_user_id_by_name(user_name, group_id)
+                    
+                    if not target_user_id:
+                        # 如果无法找到用户ID，尝试直接使用用户名作为数字ID（如果是纯数字）
+                        import re
+                        if re.match(r'^\d+$', user_name):
+                            target_user_id = user_name
+                            self._debug_log(f"用户名是纯数字，直接使用作为用户ID: {target_user_id}")
+                        else:
+                            yield event.plain_result(f"无法找到用户 '{user_name}'，请使用@用户或提供正确的用户ID")
+                            return
+                    else:
+                        self._debug_log(f"通过用户名找到用户ID: {target_user_id}")
         
         try:
             # 获取用户头像

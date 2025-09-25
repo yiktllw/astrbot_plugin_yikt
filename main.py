@@ -138,7 +138,7 @@ class YiktPlugin(Star):
         return group_id
 
     @filter.command("pet")
-    async def pet_command(self, event: AstrMessageEvent, template: str = None, target: str = None):
+    async def pet_command(self, event: AstrMessageEvent, *args):
         """
         /pet <模板> [目标] - 生成 petpet 图片
         
@@ -150,9 +150,13 @@ class YiktPlugin(Star):
         message_text = event.message_str
         sender_id = event.get_sender_id()
         
-        self._debug_log(f"收到pet命令: {message_text}")
+        self._debug_log(f"收到pet命令: {message_text}, args={args}")
+        
+        # 解析参数
+        template = args[0] if len(args) > 0 else None
+        target = args[1] if len(args) > 1 else None
+        
         self._debug_log(f"解析参数: template='{template}', target='{target}'")
-        self._debug_log(f"消息链: {[str(seg) for seg in message_chain]}")
         
         # 检查模板参数
         if not template:
@@ -197,38 +201,10 @@ class YiktPlugin(Star):
             target_user_id = sender_id
             self._debug_log(f"未指定目标，使用发送者: {target_user_id}")
         
+        # 确保有目标用户ID
         if not target_user_id:
-            if not at_users and not user_names:
-                # 如果没有指定用户，使用发送者自己
-                target_user_id = sender_id
-                self._debug_log(f"未指定目标用户，使用发送者: {target_user_id}")
-            else:
-                # 优先使用@的用户
-                if at_users:
-                    target_user_id = at_users[0]
-                    self._debug_log(f"使用@用户: {target_user_id}")
-                else:
-                    # 尝试通过用户名查找用户ID
-                    user_name = user_names[0]
-                    self._debug_log(f"尝试通过用户名查找用户: {user_name}")
-                    
-                    # 获取群组ID用于查找用户
-                    session_id = event.get_session_id()
-                    group_id = self.get_group_id_from_session(session_id)
-                    
-                    target_user_id = await self._get_user_id_by_name(user_name, group_id)
-                    
-                    if not target_user_id:
-                        # 如果无法找到用户ID，尝试直接使用用户名作为数字ID（如果是纯数字）
-                        import re
-                        if re.match(r'^\d+$', user_name):
-                            target_user_id = user_name
-                            self._debug_log(f"用户名是纯数字，直接使用作为用户ID: {target_user_id}")
-                        else:
-                            yield event.plain_result(f"无法找到用户 '{user_name}'，请使用@用户或提供正确的用户ID")
-                            return
-                    else:
-                        self._debug_log(f"通过用户名找到用户ID: {target_user_id}")
+            yield event.plain_result("无法确定目标用户，请检查输入")
+            return
         
         try:
             # 获取用户头像

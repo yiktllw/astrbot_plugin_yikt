@@ -224,7 +224,7 @@ class YiktPlugin(Star):
         return group_id
 
     @filter.command("pet")
-    async def pet_command(self, event: AstrMessageEvent, template_name: str = None):
+    async def pet_command(self, event: AstrMessageEvent):
         """
         /pet <模板> [目标] - 生成 petpet 图片
         
@@ -234,16 +234,21 @@ class YiktPlugin(Star):
         """
         message_chain = event.get_messages()
 
+        self._debug_log(f"原始消息字符串: {repr(event.message_str)}")
+        self._debug_log(f"事件类型: {type(event)}")
         message_text = event.message_str
         sender_id = event.get_sender_id()
 
-        # 从解析的参数中获取模板名称，优先使用命令解析的参数
-        parsed_params = event.get_extra().get("parsed_params", {})
-        template = parsed_params.get("template", template_name)
-
-        self._debug_log(f"收到pet命令: {message_text}, template='{template}'")
+        # 从消息文本中解析模板名称
+        parts = message_text.strip().split()
+        self._debug_log(f"调试: 消息分割结果 = {parts}")
         
-        # 检查模板参数
+        # 获取模板名称 (第二个词，跳过命令名)
+        template = None
+        if len(parts) >= 2:
+            template = parts[1]
+        
+        self._debug_log(f"收到pet命令: {message_text}, template='{template}'")
         if not template:
             yield event.plain_result("请指定模板类型！\n用法: /pet <模板> [@用户|用户ID]\n支持的模板: 挠头、拍、摸、摸摸")
             return
@@ -257,6 +262,7 @@ class YiktPlugin(Star):
         
         # 从消息中解析目标用户信息
         target_user_id = self._parse_target_user(message_chain, message_text, sender_id)
+        self._debug_log(f"解析到的目标用户ID: {target_user_id}, 发送者ID: {sender_id}")
         
         # 确保有目标用户ID
         if not target_user_id:
@@ -265,6 +271,20 @@ class YiktPlugin(Star):
         
         try:
             # 获取用户头像
+            # 如果解析结果是发送者自己，尝试从消息链字符串中查找AT用户
+            if str(target_user_id) == str(sender_id):
+                full_message_str = str(message_chain)
+                import re
+                # 查找数字ID模式（通常AT用户ID是长数字）
+                id_pattern = r"(\d{8,})"
+                ids = re.findall(id_pattern, full_message_str)
+                # 过滤掉发送者ID，找到其他用户ID
+                other_ids = [uid for uid in ids if uid != str(sender_id)]
+                if other_ids:
+                    target_user_id = other_ids[0]
+                    self._debug_log(f"从消息链重新找到目标用户: {target_user_id}")
+                self._debug_log(f"从消息链重新找到目标用户: {target_user_id}")
+                self._debug_log(f"重新解析找到AT用户: {target_user_id}")
             self._debug_log(f"开始获取用户 {target_user_id} 的头像")
             avatar_bytes = await self.get_avatar(str(target_user_id))
             

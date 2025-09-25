@@ -129,7 +129,7 @@ class YiktPlugin(Star):
         return group_id
 
     @filter.command("pet")
-    async def pet_command(self, event: AstrMessageEvent):
+    async def pet_command(self, event: AstrMessageEvent, *args, **kwargs):
         """
         /pet 模板名 [@用户|用户ID] - 生成 petpet 图片
         支持的模板：挠头、拍、摸、摸摸
@@ -228,7 +228,7 @@ class YiktPlugin(Star):
             yield event.plain_result(f"生成petpet失败: {e}")
 
     @filter.command("pet帮助")
-    async def pet_help(self, event: AstrMessageEvent):
+    async def pet_help(self, event: AstrMessageEvent, *args, **kwargs):
         """显示petpet帮助信息"""
         help_text = (
             "=== yikt petpet 帮助 ===\n\n"

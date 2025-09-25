@@ -108,6 +108,37 @@ class YiktPlugin(Star):
         self._debug_log(f"提取用户信息: @用户={at_users}, 用户名={user_names}")
         return at_users, user_names
 
+    def _parse_target_user(self, message_chain, message_text: str, sender_id: str) -> Optional[str]:
+        """从消息中解析目标用户ID"""
+        # 首先检查是否有@用户（从消息链中提取）
+        at_users = []
+        for segment in message_chain:
+            if hasattr(segment, 'type') and segment.type == 'at':
+                if hasattr(segment, 'data') and 'qq' in segment.data:
+                    at_users.append(segment.data['qq'])
+        
+        self._debug_log(f"找到@用户: {at_users}")
+        
+        if at_users:
+            # 优先使用@用户（这是最常见的情况）
+            target_user_id = at_users[0]
+            self._debug_log(f"使用@用户: {target_user_id}")
+            return target_user_id
+        
+        # 尝试从消息文本中提取用户ID（去掉命令部分后的数字）
+        import re
+        # 匹配 /pet 模板名 后面的数字ID
+        pattern = r'/pet\s+\w+\s+(\d+)'
+        match = re.search(pattern, message_text)
+        if match:
+            target_user_id = match.group(1)
+            self._debug_log(f"从消息文本解析出用户ID: {target_user_id}")
+            return target_user_id
+        
+        # 没有指定用户，使用发送者自己
+        self._debug_log(f"未指定目标，使用发送者: {sender_id}")
+        return sender_id
+
     async def _get_user_id_by_name(self, user_name: str, group_id: str) -> Optional[str]:
         """通过用户名获取用户ID（在群组中搜索）"""
         try:
@@ -138,19 +169,19 @@ class YiktPlugin(Star):
         return group_id
 
     @filter.command("pet")
-    async def pet_command(self, event: AstrMessageEvent, template: str = None, target: str = None):
+    async def pet_command(self, event: AstrMessageEvent, template: str = None):
         """
         /pet <模板> [目标] - 生成 petpet 图片
         
         参数:
         - template: 模板名称 (挠头、拍、摸、摸摸)
-        - target: 可选，目标用户(支持@用户、用户ID或不指定使用自己)
+        目标用户通过@或消息解析自动获取
         """
         message_chain = event.get_messages()
         message_text = event.message_str
         sender_id = event.get_sender_id()
         
-        self._debug_log(f"收到pet命令: {message_text}, template='{template}', target='{target}'")
+        self._debug_log(f"收到pet命令: {message_text}, template='{template}'")
         
         # 检查模板参数
         if not template:
@@ -164,36 +195,8 @@ class YiktPlugin(Star):
         template_id = self.template_mapping[template]
         self._debug_log(f"使用模板: {template} -> {template_id}")
         
-        # 首先检查是否有@用户（从消息链中提取）
-        at_users = []
-        for segment in message_chain:
-            if hasattr(segment, 'type') and segment.type == 'at':
-                if hasattr(segment, 'data') and 'qq' in segment.data:
-                    at_users.append(segment.data['qq'])
-        
-        self._debug_log(f"找到@用户: {at_users}")
-        
-        # 确定目标用户ID
-        target_user_id = None
-        
-        if at_users:
-            # 优先使用@用户（这是最常见的情况）
-            target_user_id = at_users[0]
-            self._debug_log(f"使用@用户: {target_user_id}")
-        elif target:
-            # 使用命令行第二个参数
-            import re
-            if re.match(r'^\d+$', target):
-                target_user_id = target
-                self._debug_log(f"使用命令行数字参数: {target}")
-            else:
-                # 如果不是数字，提示错误
-                yield event.plain_result(f"用户ID必须是纯数字，请使用@用户或正确的数字用户ID")
-                return
-        else:
-            # 没有指定用户，使用发送者自己
-            target_user_id = sender_id
-            self._debug_log(f"未指定目标，使用发送者: {target_user_id}")
+        # 从消息中解析目标用户信息
+        target_user_id = self._parse_target_user(message_chain, message_text, sender_id)
         
         # 确保有目标用户ID
         if not target_user_id:
@@ -258,9 +261,10 @@ class YiktPlugin(Star):
             "  /pet 拍 1234567890\n"
             "  /pet 挠头\n\n"
             "📝 注意事项：\n"
-            "  • 支持@用户、直接输入用户ID（纯数字）\n"
+            "  • 支持@用户、直接在命令后输入用户ID（纯数字）\n"
             "  • 如果不指定用户，将使用你自己的头像\n"
             "  • 请确保有权限获取目标用户的头像\n"
+            "  • 用户ID应该紧跟在模板名称后面，如: /pet 拍 1234567890\n"
         )
         yield event.plain_result(help_text)
 

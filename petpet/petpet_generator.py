@@ -614,5 +614,56 @@ def main():
         print(f"❌ 批量生成失败: {e}")
 
 
+def generate_meme_from_bytes(avatar_bytes: bytes, template_name: str, 
+                           text_content: str = None, templates_dir: str = "./templates") -> bytes:
+    """
+    从字节数据生成表情包并返回字节数据
+    
+    Args:
+        avatar_bytes: 头像图片的字节数据
+        template_name: 模板名称 (如 "petpet", "pat", "scratch_head" 等)
+        text_content: 文字内容 (用于支持文字的模板，可选)
+        templates_dir: 模板文件夹路径 (默认 "./templates")
+        
+    Returns:
+        生成的图片字节数据
+    """
+    try:
+        from io import BytesIO
+        import tempfile
+        import os
+        
+        # 初始化生成器
+        generator = PetpetGenerator(templates_dir)
+        
+        # 从字节数据加载头像
+        avatar_stream = BytesIO(avatar_bytes)
+        avatar = Image.open(avatar_stream).convert("RGBA")
+        
+        # 创建临时输出文件
+        with tempfile.NamedTemporaryFile(suffix=".gif", delete=False) as temp_file:
+            temp_path = temp_file.name
+        
+        try:
+            # 生成表情包 (默认生成GIF)
+            result_path = generator.generate_gif(avatar, template_name, temp_path, text_content=text_content)
+            
+            # 读取生成的文件并返回字节数据
+            with open(result_path, "rb") as f:
+                result_bytes = f.read()
+            
+            return result_bytes
+            
+        finally:
+            # 清理临时文件
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+        
+    except Exception as e:
+        error_msg = f"生成表情包失败: {e}"
+        print(error_msg)
+        raise Exception(error_msg)
+
+
 if __name__ == "__main__":
     main()

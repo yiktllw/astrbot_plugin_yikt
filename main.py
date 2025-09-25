@@ -15,7 +15,7 @@ from PIL import Image
 
 # 导入 petpet 生成器
 try:
-    from .petpet.petpet_generator import generate_meme
+    from .petpet.petpet_generator import generate_meme, generate_meme_from_bytes
 except ImportError:
     # 如果无法导入，使用系统路径导入
     import sys
@@ -23,7 +23,7 @@ except ImportError:
     petpet_path = os.path.join(os.path.dirname(__file__), 'petpet')
     if petpet_path not in sys.path:
         sys.path.append(petpet_path)
-    from petpet_generator import generate_meme
+    from petpet_generator import generate_meme, generate_meme_from_bytes
 
 
 @register(
@@ -169,18 +169,23 @@ class YiktPlugin(Star):
         return group_id
 
     @filter.command("pet")
-    async def pet_command(self, event: AstrMessageEvent, template: str = None):
+    async def pet_command(self, event: AstrMessageEvent, template_name: str = None):
         """
         /pet <模板> [目标] - 生成 petpet 图片
         
         参数:
-        - template: 模板名称 (挠头、拍、摸、摸摸)
+        - template_name: 模板名称 (挠头、拍、摸、摸摸)
         目标用户通过@或消息解析自动获取
         """
         message_chain = event.get_messages()
+
         message_text = event.message_str
         sender_id = event.get_sender_id()
-        
+
+        # 从解析的参数中获取模板名称，优先使用命令解析的参数
+        parsed_params = event.get_extra().get("parsed_params", {})
+        template = parsed_params.get("template", template_name)
+
         self._debug_log(f"收到pet命令: {message_text}, template='{template}'")
         
         # 检查模板参数
@@ -219,10 +224,13 @@ class YiktPlugin(Star):
             
             # 生成 petpet 图片
             self._debug_log(f"开始生成petpet，模板: {template_id}")
+            templates_dir = os.path.join(os.path.dirname(__file__), 'petpet', 'templates')
             result_bytes = await asyncio.to_thread(
-                generate_meme,
+                generate_meme_from_bytes,
+                avatar_bytes,
                 template_id,
-                [avatar_bytes]  # petpet API 需要图片列表
+                None,  # text_content
+                templates_dir
             )
             
             if result_bytes:

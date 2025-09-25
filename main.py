@@ -131,9 +131,11 @@ class YiktPlugin(Star):
     @filter.command("pet")
     async def pet_command(self, event: AstrMessageEvent, template: str = None, target: str = None):
         """
-        /pet 模板名 [@用户|用户ID] - 生成 petpet 图片
-        支持的模板：挠头、拍、摸、摸摸
-        支持@用户、用户ID（纯数字）或不指定用户（使用自己）
+        /pet <模板> [目标] - 生成 petpet 图片
+        
+        参数:
+        - template: 模板名称 (挠头、拍、摸、摸摸)
+        - target: 可选，目标用户(支持@用户、用户ID或不指定使用自己)
         """
         message_chain = event.get_messages()
         message_text = event.message_str

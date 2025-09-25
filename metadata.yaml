@@ -1,0 +1,6 @@
+name: astrbot_plugin_yikt
+desc: yikt 多功能插件，提供 petpet 生成等功能
+help: 使用 /pet <模板> @用户 生成petpet图片，支持挠头、拍等模板
+version: v1.0.0
+author: yiktllw
+repo: https://github.com/yiktllw/astrbot_plugin_yikt

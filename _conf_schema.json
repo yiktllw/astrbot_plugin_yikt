@@ -4,5 +4,36 @@
     "type": "bool",
     "default": false,
     "hint": "开启后会输出详细的调试信息，用于排查问题"
+  },
+  "message_recorder": {
+    "description": "消息记录功能",
+    "type": "dict",
+    "default": {
+      "enabled": true,
+      "save_probability": 0.05,
+      "replay_probability": 0.02,
+      "max_messages": 200,
+      "max_message_length": 100,
+      "exclude_commands": true
+    },
+    "hint": "自动记录群聊消息并随机复读的功能配置"
+  },
+  "save_probability": {
+    "description": "消息保存概率",
+    "type": "float",
+    "default": 0.05,
+    "hint": "每条消息被保存的概率 (0.0-1.0)，默认5%"
+  },
+  "replay_probability": {
+    "description": "消息复读概率", 
+    "type": "float",
+    "default": 0.02,
+    "hint": "每条消息触发复读的概率 (0.0-1.0)，默认2%"
+  },
+  "max_messages": {
+    "description": "最大保存消息数",
+    "type": "int",
+    "default": 200,
+    "hint": "最多保存的消息条数，超出时会删除最旧的消息"
   }
 }
